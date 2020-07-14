@@ -1,63 +1,122 @@
-// Copyright 2019 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// [START gae_go111_app]
-
-// Sample helloworld is an App Engine app.
 package main
 
-// [START import]
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/gorilla/mux"
+	"github.com/lib/pq"
 )
 
-// [END import]
-// [START main_func]
+type SuggestionReq struct {
+	Id     string `json:"id"`
+	Email  string `json:"email"`
+	Detail string `json:"detail"`
+	Date   string `json:"date"`
+}
+
+type SuggestionRes struct {
+	Id     string `json:"id"`
+	Email  string `json:"email"`
+	Detail string `json:"detail"`
+	Date   string `json:"date"`
+}
+
+type Error struct {
+	Message string `json:"message"`
+}
+
+var db *sql.DB
+
+// main func
 
 func main() {
-	http.HandleFunc("/", indexHandler)
 
-	// [START setting_port]
+	// DB driver folder
+	pgUrl, err := pq.ParseURL("postgres://aabmoeof:a_PnjStckBQp-h_fy2KIrUEWOG9u8LHu@rogue.db.elephantsql.com:5432/aabmoeof")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db, err = sql.Open("postgres", pgUrl)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// router / handler definition - folder
+	router := mux.NewRouter()
+	router.HandleFunc("/v1/Feedback/InitialFeedback", insertHandler).Methods("POST")
+
+	//port setup
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
-		log.Printf("Defaulting to port %s", port)
+		log.Printf("Defaulting port to %s", port)
 	}
-
-	log.Printf("Listening on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	log.Printf("Listening to port %s", port)
+	if err := http.ListenAndServe(":"+port, router); err != nil {
 		log.Fatal(err)
 	}
-	// [END setting_port]
+
 }
 
-// [END main_func]
+// insertHandler func
 
-// [START indexHandler]
+func insertHandler(w http.ResponseWriter, r *http.Request) {
 
-// indexHandler responds to requests with our greeting.
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+	// controller - folder
+	fmt.Println("In the IH")
+
+	var iHSuggestionReq SuggestionReq
+	var iHSuggestionRes SuggestionRes
+	var error Error
+
+	fmt.Println("iHSuggestionReq:", iHSuggestionReq)
+	fmt.Println("r.Body:", r.Body)
+
+	err := json.NewDecoder(r.Body).Decode(&iHSuggestionReq)
+
+	if err != nil {
+		error.Message = "Bad data"
+		responseWithError(w, http.StatusBadRequest, error)
 		return
 	}
-	fmt.Fprint(w, "Hello, World!\n")
-	fmt.Fprint(w, "this is Test!")
+
+	if iHSuggestionReq.Email == "" {
+		error.Message = "Email ID should not be empty"
+		responseWithError(w, http.StatusBadRequest, error)
+		return
+	}
+
+	fmt.Println("iHSugestiontReq:", iHSuggestionReq)
+
+	queryDet := "insert into userfeedback (email, detail, date) values($1, $2, $3) RETURNING id;"
+
+	err1 := db.QueryRow(queryDet, iHSuggestionReq.Email, iHSuggestionReq.Detail, iHSuggestionReq.Date).Scan(&iHSuggestionRes.Id)
+
+	if err1 != nil {
+		log.Fatal(err1)
+	}
+
+	iHSuggestionRes.Email = iHSuggestionReq.Email
+	iHSuggestionRes.Detail = iHSuggestionReq.Detail
+	iHSuggestionRes.Date = iHSuggestionReq.Date
+	//	iHSuggestionRes.Id = "1"
+
+	w.Header().Set("content-type", "application/json")
+
+	json.NewEncoder(w).Encode(iHSuggestionRes)
+
 }
 
-// [END indexHandler]
-// [END gae_go111_app]
+// responseWithError func
+func responseWithError(w http.ResponseWriter, status int, error Error) {
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(error)
+}
