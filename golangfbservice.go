@@ -37,7 +37,7 @@ var db *sql.DB
 func main() {
 
 	// DB driver folder
-	pgUrl, err := pq.ParseURL("postgres://aabmoeof:a_PnjStckBQp-h_fy2KIrUEWOG9u8LHu@rogue.db.elephantsql.com:5432/aabmoeof")
+	pgUrl, err := pq.ParseURL("postgres:")
 
 	if err != nil {
 		log.Fatal(err)
